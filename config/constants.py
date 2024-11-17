@@ -10,6 +10,8 @@ load_dotenv()
 TG = os.environ.get('TG_TOKEN')
 OPENAI = os.environ.get('OPENAI_TOKEN')
 ORG = os.environ.get('ORG_TOKEN')
+EMAIL = os.environ.get('EMAIL')
+PASS = os.environ.get('PASS')
 
 PROXIES = MapProxy({
     'https://': 'http://FHmgTs:RFBgtW@195.158.194.74:8000',

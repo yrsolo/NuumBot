@@ -1,3 +1,9 @@
+import httpx
+from openai import AsyncOpenAI
+
+from config import OPENAI, PROXIES
+
+
 class AsyncOpenAIChatAgent(object):
     """Агент для чатов с OpenAI."""
 
