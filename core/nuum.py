@@ -2,13 +2,17 @@ import random
 import time
 
 from selenium.webdriver.common.by import By
+import pandas as pd
+
+from service.browser import Browser
 from service.gpt import AsyncOpenAIChatAgent
+from config import OPENAI, PROXIES, NUUM, POLINA_CLIPS, CLIPS, cookie_path, STICKERS_PACKS, STICKERS
 
-from config import OPENAI, PROXIES, NUUM, POLINA_CLIPS, CLIPS, cookie_path, EMAIL, PASS
 
-def img_stiker(s):
+
+def img_sticker(s):
     s.get_attribute('src')
-    # load stiker from url
+    # load sticker from url
     # example: 'https://static.nuum.ru/sticker-packs/seal/webp/medium/seal-14.webp'
     import requests
     import io
@@ -34,8 +38,8 @@ class Elm:
         self.text = el.text
         self.tag = el.tag_name
         self.el = el
-        self.url = el.get_attribute('src')
-        self.pos = el.location
+        self.src = el.get_attribute('src')
+        self.location = el.location
         self.link = el.get_attribute('href')
 
     def click(self):
@@ -47,6 +51,8 @@ class Elm:
 
 class NuumBaseAction:
     def __init__(self, driver):
+        if isinstance(driver, Browser):
+            driver = driver.driver
         self.driver = driver
         self.gpt = AsyncOpenAIChatAgent(OPENAI, proxies=PROXIES)
         self.tmp = None
@@ -78,38 +84,39 @@ class NuumBaseAction:
             return True
         return False
 
-    def send_stiker(self):
-        # comment-input__smile-button ng-star-inserted
-        element = self.driver.find_elements(By.XPATH, "//button[contains(@class, 'comment-input__smile-button')]")
-
+    def send_sticker(self, only_safe=True):
+        # press smile
+        element = self.driver.find_elements(By.CLASS_NAME, 'comment-input__smile-button')
         if element:
-            rnd_sleep()
             element[0].click()
-
+        # select sticker tab
         element = self.driver.find_elements(By.XPATH, "//span[contains(text(), 'Стикеры')]")
-
         if element:
-            rnd_sleep()
             element[0].click()
+        # select sticker pack
+        packs = self.driver.find_elements(By.XPATH, "//img[contains(@class, 'smiles__navigation-sticker')]")
+        if packs:
+            if only_safe:
+                packs = [p for p in packs if p.get_attribute('src').split('/')[-2] in STICKERS_PACKS]
+            pack = random.choice(packs)
+            pack.click()
+            rnd_sleep()
+        # select sticker
+        stickers = []
+        smiles_content = self.driver.find_elements(By.XPATH, "//div[contains(@class, 'smiles__content')]")
+        if smiles_content:
+            stickers = smiles_content[0].find_elements(By.XPATH, "//img[contains(@class, 'sticker-img-loaded')]")
+            # stickers = [Elm(s) for s in stickers]
+            # stickers = [s for s in stickers if s.is_displayed()]
 
-        rnd_sleep()
-        d = self.driver.find_elements(By.XPATH, "//div[contains(@class, 'smiles__navigation-sticker-wrapper')]")
-        if d:
-            d = random.choice(d)
-            d.click()
-            time.sleep(1)
-
-        stikers_div = self.driver.find_elements(By.XPATH, "//div[contains(@class, 'sticker ng-star-inserted')]")
-        stikers = []
-        for s in stikers_div:
-            stiker = s.find_elements(By.CSS_SELECTOR, '*')
-            if stiker:
-                if stiker[0].get_attribute('src'):
-                    stikers.append(stiker[0])
-
-        if stikers:
-            stiker = random.choice(stikers)
-            stiker.click()
+            if only_safe:
+                stickers = [s for s in stickers if s.get_attribute('src').split('/')[-1] in STICKERS]
+        # send sticker
+        # tmp.append(stickers)
+        if stickers:
+            sticker = random.choice(stickers)
+            # sticker.click()
+            self.driver.execute_script("arguments[0].click();", sticker)
             return True
         return False
 
@@ -165,7 +172,9 @@ class NuumBaseAction:
             next_button[-1].click()
 
     def in_screen(self, el):
-        return el.pos['y'] > 0 and el.pos['y'] < 1500
+        x = el.location['x']
+        y = el.location['y']
+        return y > 0 and x < 1500
 
     def find_by_text(self, text, el='span'):
         elements = self.driver.find_elements(By.XPATH, f"//{el}[contains(text(), '{text}')]")
@@ -182,6 +191,19 @@ class NuumBaseAction:
             return user_names[0].text.split('\n')[0]
         return None
 
+    def turn_off_notifications(self):
+        btns = self.driver.find_elements(By.XPATH, "//button[contains(@class, 'secondary-btn small only-icon')]")
+        click = 0
+        for i, b in enumerate(btns):
+            svg = b.find_elements(By.CLASS_NAME, 'ng-star-inserted')
+            fill = False
+            if svg:
+                fill = 'icons-bell-filled' in svg[0].get_attribute('data-inlinesvg')
+            if fill:
+                b.click()
+                click += 1
+            print(i, '/', len(btns), 'clicked:', click, '                ', end='\r')
+
 
 class NuumActions(NuumBaseAction):
     def __init__(self, driver):
@@ -189,22 +211,29 @@ class NuumActions(NuumBaseAction):
 
     def open_rec(self):
         self.open(CLIPS)
+        rnd_sleep()
+        self.driver.refresh()
+        rnd_sleep(1)
         clips = self.driver.find_elements(By.XPATH, "//a[contains(@href, '/clips/')]")
         if clips:
             clips[0].click()
 
     def open_subs(self):
         self.open(CLIPS)
+        rnd_sleep()
+        self.driver.refresh()
+        rnd_sleep(1)
         self.find_by_text('Подписки').click()
+        rnd_sleep()
         clips = self.driver.find_elements(By.XPATH, "//a[contains(@href, '/clips/')]")
         if clips:
             clips[0].click()
 
-    def like_stiker_subscribe(self, like_ratio=1, stiker_ratio=1, subscribe_ratio=1):
+    def like_sticker_subscribe(self, like_ratio=1, sticker_ratio=1, subscribe_ratio=1):
         if not self.is_liked():
-            like = stiker = subscribe = False
-            if stiker_ratio >= random.random():
-                stiker = self.send_stiker()
+            like = sticker = subscribe = False
+            if sticker_ratio >= random.random():
+                sticker = self.send_sticker()
                 rnd_sleep()
             if like_ratio >= random.random():
                 like = self.like()
@@ -212,17 +241,9 @@ class NuumActions(NuumBaseAction):
             if subscribe_ratio >= random.random():
                 subscribe = self.subscribe()
 
-            name = self.user_name()
-
-            log = [name + ': ', ]
-            if stiker:
-                log.append('stiker ,')
-            if like:
-                log.append('like')
-            if subscribe:
-                log.append('and subscribe')
-            if stiker or like or subscribe:
-                print(' '.join(log))
-                return True
-        return False
+            if sticker or like or subscribe:
+                name = self.user_name()
+                datetime = pd.Timestamp.now()
+                return {'name': name, 'sticker': sticker, 'like': like, 'subscribe': subscribe, 'time': datetime}
+        return None
 
