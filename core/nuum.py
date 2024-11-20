@@ -216,7 +216,8 @@ class NuumActions(NuumBaseAction):
         rnd_sleep(1)
         clips = self.driver.find_elements(By.XPATH, "//a[contains(@href, '/clips/')]")
         if clips:
-            clips[0].click()
+            clip = random.choice(clips)
+            clip.click()
 
     def open_subs(self):
         self.open(CLIPS)
@@ -227,14 +228,16 @@ class NuumActions(NuumBaseAction):
         rnd_sleep()
         clips = self.driver.find_elements(By.XPATH, "//a[contains(@href, '/clips/')]")
         if clips:
-            clips[0].click()
+            clip = random.choice(clips)
+            clip.click()
 
     def like_sticker_subscribe(self, like_ratio=1, sticker_ratio=1, subscribe_ratio=1):
         if not self.is_liked():
+            rnd_sleep(1)
             like = sticker = subscribe = False
             if sticker_ratio >= random.random():
                 sticker = self.send_sticker()
-                rnd_sleep()
+                #rnd_sleep()
             if like_ratio >= random.random():
                 like = self.like()
                 rnd_sleep()
